@@ -11,25 +11,43 @@ with open('item.json', 'r') as file:
     item = json.load(file)
 with open('level.json', 'r') as file:
     level = json.load(file)
-    
-i = None
-paths = []
-difficulty = None
-Stats = {}
 
+
+ 
+i = None
+difficulty = None   #difficulty, first asked variable
+Stats = {}
+pathWeight = [] #create pathWeight
+for a in list(level.keys()):  pathWeight.append(level[a]["weight"]) #add weights from level.json to pathWeight
 
 
 
 def move():
-    for a in list(level.keys()):
-        paths.append(level[a]["weight"])
-    print(paths)
-    pathChoices = random.choices(list(level.keys()), weights = paths, k = random.randint(2, 5))
-    for a in pathChoices:
-        print(a)
-        print(level[a]["description"])
-
-
+    valid = False   #generic while loop ender
+    pathChoices = random.randint(2, 5)  #how many places can the player go to?
+    pathView = random.choices(list(level.keys()), weights = pathWeight, k = pathChoices)    #choose the actual paths for the amount of path choices
+    
+    while valid == False:   #loop, player decides where to go in overworld
+        for a in range(pathChoices):    #display path choices with descriptions
+            print(f"{a+1}.) {pathView[a]}: {level[pathView[a]]["description"]}\n")
+        PlayerChoice = input(f"Select path (1-{pathChoices}) -->")  #input
+        match PlayerChoice: #check how many path choices there are and allow valid number inputs for pathChoices
+            case "1":
+                print("chose path 1")
+                valid = True
+            case "2":
+                print("chose path 2")
+                valid = True
+            case "3" if pathChoices >= 3:
+                print("chose path 3")
+                valid = True
+            case "4" if pathChoices >= 4:
+                print("chose path 4")
+                valid = True
+            case "5" if pathChoices >= 5:
+                print("chose path 5")
+                valid = True
+        subprocess.run('clear', shell=True)
 
 
 
@@ -38,7 +56,6 @@ def move():
 
 def run():
     
-    print(level["room"])
     
     i = input("|--Press Enter to Continue--|")
     subprocess.run('clear', shell=True)
