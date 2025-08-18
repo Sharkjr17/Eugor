@@ -1,0 +1,14 @@
+{
+    "Difficulty Prompt": "Select your difficulty: \n A.) Easy \n B.) Intermediate \n C.) Hard \n D.) Impossible \n Select Difficulty -->",
+    "Intro Text 1": {
+        "easy": "Welcome",
+        "intermediate": "to",
+        "hard": "hell",
+        "Impossible": "fuck off. placeholder"
+    }
+
+
+
+
+
+}

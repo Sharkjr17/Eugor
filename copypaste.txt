@@ -1,0 +1,11 @@
+"": {
+        "easy": "",
+        "intermediate": "",
+        "hard": "",
+        "Impossible": ""
+    }
+
+data[""][difficulty]
+
+i = input("|--Press Enter to Continue--|")
+subprocess.run('clear', shell=True)
