@@ -52,12 +52,30 @@ def move():
         subprocess.run('clear', shell=True)
     
     match level[pathView[int(playerChoice) - 1]]["type"]:
-        case "dungeon":
-            print("dungeon")
-        case "buff":
-            print("buff")
-        case "boss":
-            print("boss")
+        case "dungeon": dungeon(level[pathView[int(playerChoice) - 1]])
+        case "buff": buff(level[pathView[int(playerChoice) - 1]])
+        case "boss": boss(level[pathView[int(playerChoice) - 1]])
+        
+        
+
+
+
+
+def dungeon():
+    print("dungeon")
+    
+    
+    
+    
+    
+def buff():
+    print("buff")
+    
+    
+    
+    
+def boss():
+    print("boss")
 
 
 
@@ -65,10 +83,9 @@ def move():
 
 
 def run():
-    
-    
     i = input("|--Press Enter to Continue--|")
     subprocess.run('clear', shell=True)
+    
     
     global difficulty
     while difficulty == None: #difficulty select
