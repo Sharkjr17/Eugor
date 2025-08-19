@@ -22,6 +22,8 @@ for a in list(level.keys()):  pathWeight.append(level[a]["weight"]) #add weights
 
 
 
+
+
 def move():
     valid = False   #generic while loop ender
     pathChoices = random.randint(2, 5)  #how many places can the player go to?
@@ -30,8 +32,8 @@ def move():
     while valid == False:   #loop, player decides where to go in overworld
         for a in range(pathChoices):    #display path choices with descriptions
             print(f"{a+1}.) {pathView[a]}: {level[pathView[a]]["description"]}\n")
-        PlayerChoice = input(f"Select path (1-{pathChoices}) -->")  #input
-        match PlayerChoice: #check how many path choices there are and allow valid number inputs for pathChoices
+        playerChoice = input(f"Select path (1-{pathChoices}) -->")  #input
+        match playerChoice: #check how many path choices there are and allow valid number inputs for pathChoices
             case "1":
                 print("chose path 1")
                 valid = True
@@ -48,6 +50,14 @@ def move():
                 print("chose path 5")
                 valid = True
         subprocess.run('clear', shell=True)
+    
+    match level[pathView[int(playerChoice) - 1]]["type"]:
+        case "dungeon":
+            print("dungeon")
+        case "buff":
+            print("buff")
+        case "boss":
+            print("boss")
 
 
 

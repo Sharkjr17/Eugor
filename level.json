@@ -1,38 +1,32 @@
 {
     "paved": {
       "description": "A well-trodden road with minimal threats.",
-      "enemyCount": [1, 2],
-      "enemyTier": "low",
+      "type": "dungeon",
       "weight": 5
     },
     "unmarked": {
       "description": "A risky trail with signs of recent conflict.",
-      "enemyCount": [3, 5],
-      "enemyTier": "mid",
+      "type": "dungeon",
       "weight": 4
     },
     "dense": {
       "description": "Thick wilderness hiding deadly foes.",
-      "enemyCount": [1, 2],
-      "enemyTier": "high",
+      "type": "dungeon",
       "weight": 3
     },
     "boss": {
       "description": "A foreboding gate leads to a powerful enemy.",
-      "enemyCount": [1],
-      "enemyTier": "boss",
+      "type": "boss",
       "weight": 1
     },
     "smith": {
       "description": "A forge where strength is bought with coin.",
-      "enemyCount": [0],
-      "effect": "buff",
+      "type": "buff",
       "weight": 2
     },
     "fortune": {
       "description": "A mystic offers blessings for a price.",
-      "enemyCount": [0],
-      "effect": "buff",
+      "type": "buff",
       "weight": 2
     }
 }
