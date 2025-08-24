@@ -1,17 +1,17 @@
 {
     "paved": {
       "description": "A well-trodden road with minimal threats.",
-      "type": "dungeon",
+      "type": "dung",
       "weight": 5
     },
     "unmarked": {
       "description": "A risky trail with signs of recent conflict.",
-      "type": "dungeon",
+      "type": "dung",
       "weight": 4
     },
     "dense": {
       "description": "Thick wilderness hiding deadly foes.",
-      "type": "dungeon",
+      "type": "dung",
       "weight": 3
     },
     "boss": {
@@ -19,14 +19,19 @@
       "type": "boss",
       "weight": 1
     },
-    "smith": {
-      "description": "A forge where strength is bought with coin.",
+    "Smithery": {
+      "description": "A forge where items can be upgraded",
       "type": "buff",
       "weight": 2
     },
-    "fortune": {
-      "description": "A mystic offers blessings for a price.",
+    "Church": {
+      "description": "A priest offers blessings for a dontaion.",
       "type": "buff",
+      "weight": 2
+    },
+    "Traveling Shop": {
+      "description": "A shop with basic items and small inventory.",
+      "type": "shop",
       "weight": 2
     }
 }

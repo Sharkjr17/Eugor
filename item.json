@@ -1,3 +1,23 @@
 {
-    
+    "Copper Sword": {
+        "item": "Copper Sword",
+        "description": "A flimsy sword with minimal damage",
+        "type": "sword",
+        "damage": "3",
+        "rarity": "trash"
+    },
+    "Copper Dagger": {
+        "item": "Copper Dagger",
+        "description": "The weakest weapon",
+        "type": "dagger",
+        "damage": "1",
+        "rarity": "trash"
+    },
+    "Weak Health Potion": {
+        "item": "Weak Health Potion",
+        "description": "The weakest weapon",
+        "type": "potion",
+        "heal": "50",
+        "rarity": "common"
+    }
 }
