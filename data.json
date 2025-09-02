@@ -1,5 +1,6 @@
 {
-    "Difficulty Prompt": "Select your difficulty: \n A.) Easy \n B.) Intermediate \n C.) Hard \n D.) Impossible \n Select Difficulty -->",
+    "Difficulty Prompt": "<b>Select your difficulty:</b> \n <style color='green'>A.) Easy</style> \n <style color='yellow'>B.) Intermediate</style> \n <style color='red'>C.) Hard</style> \n <style color='blue'>D.) Impossible</style> \n<b>Select Difficulty --> </b>",
+    "Difficulty Prompt Toolbar": "<b>GLODFHNA</b>",
     "Intro Text 1": {
         "easy": "Welcome",
         "intermediate": "to",

@@ -1,37 +1,52 @@
 {
-    "paved": {
-      "description": "A well-trodden road with minimal threats.",
-      "type": "dung",
-      "weight": 5
-    },
-    "unmarked": {
-      "description": "A risky trail with signs of recent conflict.",
-      "type": "dung",
-      "weight": 4
-    },
-    "dense": {
-      "description": "Thick wilderness hiding deadly foes.",
-      "type": "dung",
-      "weight": 3
-    },
-    "boss": {
-      "description": "A foreboding gate leads to a powerful enemy.",
-      "type": "boss",
-      "weight": 1
-    },
-    "Smithery": {
-      "description": "A forge where items can be upgraded",
-      "type": "buff",
-      "weight": 2
-    },
-    "Church": {
-      "description": "A priest offers blessings for a dontaion.",
-      "type": "buff",
-      "weight": 2
-    },
-    "Traveling Shop": {
-      "description": "A shop with basic items and small inventory.",
-      "type": "shop",
-      "weight": 2
-    }
+  "paved": {
+    "description": "A well-trodden road with minimal threats.",
+    "type": "dung",
+    "weight": 10000,
+    "enemy_range": [1, 2],
+    "trap_chance": 0.1,
+    "pond_chance": 0.2,
+    "num_rooms": 6,
+    "deadend_chance": 0.3
+  },
+  "unmarked": {
+    "description": "A risky trail with signs of recent conflict.",
+    "type": "dung",
+    "weight": 4,
+    "enemy_range": [2, 4],
+    "trap_chance": 0.2,
+    "pond_chance": 0.3,
+    "num_rooms": 8,
+    "deadend_chance": 0.3
+  },
+  "dense": {
+    "description": "Thick wilderness hiding deadly foes.",
+    "type": "dung",
+    "weight": 3,
+    "enemy_range": [3, 6],
+    "trap_chance": 0.35,
+    "pond_chance": 0.4,
+    "num_rooms": 10,
+    "deadend_chance": 0.4
+  },
+  "boss": {
+    "description": "A foreboding gate leads to a powerful enemy.",
+    "type": "boss",
+    "weight": 1
+  },
+  "Smithery": {
+    "description": "A forge where items can be upgraded",
+    "type": "buff",
+    "weight": 2
+  },
+  "Church": {
+    "description": "A priest offers blessings for a donation.",
+    "type": "buff",
+    "weight": 2
+  },
+  "Traveling Shop": {
+    "description": "A shop with basic items and small inventory.",
+    "type": "shop",
+    "weight": 2
+  }
 }

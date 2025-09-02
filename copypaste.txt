@@ -9,3 +9,26 @@ data[""][difficulty]
 
 i = input("|--Press Enter to Continue--|")
 subprocess.run('clear', shell=True)
+
+def clear_screen():
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+print(HTML(f"<b>{data["Intro Text 1"][difficulty]}</b>"))
+i = input(HTML(data["Difficulty Prompt"]))
+
+
+
+def is_number(text):
+    return True if text == "A" | text == "B" | text == "C" | text == "D" else False
+
+validator = Validator.from_callable(
+    is_number,
+    error_message="This input contains non-numeric characters",
+    move_cursor_to_end=True
+)
+
+ validator=validator,
+
+
+
+ roomsA = random.choices(list(dungeon[alevel].keys()), weights= None, k=roomsAmount)
