@@ -13,6 +13,13 @@
         "damage": "1",
         "rarity": "trash"
     },
+    "Tungsten Cube": {
+        "item": "Tungsten Cube",
+        "description": "Alex, This is your fault",
+        "type": "GOD",
+        "damage": "99999999999999999999999999999999999999999999999",
+        "rarity": "crazy"
+    },
     "Weak Health Potion": {
         "item": "Weak Health Potion",
         "description": "The weakest weapon",
