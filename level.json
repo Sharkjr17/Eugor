@@ -3,11 +3,7 @@
     "description": "A well-trodden road with minimal threats.",
     "type": "dung",
     "weight": 10000,
-    "enemy_range": [1, 2],
-    "trap_chance": 0.1,
-    "pond_chance": 0.2,
-    "num_rooms": 6,
-    "deadend_chance": 0.3
+    "threat": 1
   },
   "unmarked": {
     "description": "A risky trail with signs of recent conflict.",

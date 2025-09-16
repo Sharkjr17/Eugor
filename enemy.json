@@ -1,6 +1,8 @@
 {
     "Slime": {
         "Description": "Basic enemy",
+        "threat": 1,
+        "type": "ground",
         "Health": 10
     }
 }

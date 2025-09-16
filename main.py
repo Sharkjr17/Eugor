@@ -1,12 +1,8 @@
 # =========================
 # ======= IMPORTS =========
 # =========================
-import time
-import random
-import sys, subprocess
-import math
-import json
-import collections, html, copy
+import time, random, sys, subprocess, json, math, collections, html, copy
+from collections import deque
 from prompt_toolkit import print_formatted_text as print, HTML, prompt as input
 from prompt_toolkit.styles import Style
 from prompt_toolkit.completion import WordCompleter
@@ -41,8 +37,10 @@ current_room_grid = None
 player_pos = None
 current_room_type = None
 current_level_name = None
+current_dungeon_key = None
 enemies = []  # list of (row, col) for all 'E' in current room
 Stats = {}
+dStats = {}
 inv = []
 
 # =========================
@@ -50,11 +48,10 @@ inv = []
 # =========================
 # Player & Entities
 PLAYER_TILE = "@"
-ENEMY_TILE = "E"
+ENEMY_TILE = "E"  # Regular enemy
 
 # Doors
-TWO_WAY_DOOR = "&"   # can go both directions (matches updated JSON)
-ONE_WAY_DOOR = ">"   # entrance or final exit
+EXIT_DOOR = "&"   # can go both directions (matches updated JSON)
 
 # Terrain
 WALL_VERT = "|"
@@ -68,339 +65,11 @@ TRAP_TILE = "^"
 
 # Tile categories for quick checks
 TILE_TYPES = {
-    "walkable": {FLOOR_TILE, TWO_WAY_DOOR, ONE_WAY_DOOR},
+    "walkable": {FLOOR_TILE, EXIT_DOOR},
     "blocking": {WALL_VERT, WALL_HORZ, WATER_TILE},
-    "entity": {PLAYER_TILE, ENEMY_TILE}
+    "entity": {PLAYER_TILE, "E", "P", "R", "F"}  # all enemy types + player
 }
 
-
-# =========================
-# ======= HELPERS =========
-# =========================
-
-def load_room(room_dict):
-    """Convert a dict of numbered strings into a mutable 2D grid."""
-    return [list(room_dict[str(i)]) for i in range(len(room_dict))]
-
-def place_player(grid, pos):
-    """Place the player character at the given (row, col) position in the grid."""
-    grid[pos[0]][pos[1]] = PLAYER_TILE
-
-def draw_room(grid):
-    """Clear the screen and print the dungeon with colored tiles."""
-    subprocess.run('clear', shell=True)
-
-    color_map = {
-        PLAYER_TILE: '<ansigreen>{}</ansigreen>',       # @ green
-        ENEMY_TILE: '<ansired>{}</ansired>',           # E red
-        TRAP_TILE: '<ansidarkgray>{}</ansidarkgray>',  # ^ dark gray
-        WATER_TILE: '<ansiblue>{}</ansiblue>'          # ≈ blue
-    }
-
-    for row in grid:
-        styled_row = []
-        for ch in row:
-            safe_ch = html.escape(ch)
-            if ch in color_map:
-                styled_row.append(color_map[ch].format(safe_ch))
-            else:
-                styled_row.append(safe_ch)
-        print(HTML("".join(styled_row)))
-
-def get_side(pos, grid):
-    """Return which wall a position is on."""
-    r, c = pos
-    max_r = len(grid) - 1
-    max_c = len(grid[0]) - 1
-    if c == 0:
-        return "left"
-    if c == max_c:
-        return "right"
-    if r == 0:
-        return "top"
-    if r == max_r:
-        return "bottom"
-    return "unknown"
-
-def opposite_side(side):
-    """Return the opposite wall name."""
-    return {
-        "left": "right",
-        "right": "left",
-        "top": "bottom",
-        "bottom": "top"
-    }.get(side, "unknown")
-
-def door_positions_on_side(grid, side, door_char=TWO_WAY_DOOR):
-    """Find all door tiles of a given type on a specific wall."""
-    max_r = len(grid) - 1
-    max_c = len(grid[0]) - 1
-    pos = []
-    for r, row in enumerate(grid):
-        for c, ch in enumerate(row):
-            if ch != door_char:
-                continue
-            if side == "left" and c == 0:
-                pos.append((r, c))
-            elif side == "right" and c == max_c:
-                pos.append((r, c))
-            elif side == "top" and r == 0:
-                pos.append((r, c))
-            elif side == "bottom" and r == max_r:
-                pos.append((r, c))
-    if side in ("left", "right"):
-        pos.sort(key=lambda x: x[0])
-    else:
-        pos.sort(key=lambda x: x[1])
-    return pos
-
-def get_spawn_in_front_of(door_pos, grid, side):
-    """Spawn just inside the room from the given side; clamp and avoid walls."""
-    r, c = door_pos
-    max_r = len(grid) - 1
-    max_c = len(grid[0]) - 1
-
-    if side == "left":
-        c = min(c + 1, max_c)
-    elif side == "right":
-        c = max(c - 1, 0)
-    elif side == "top":
-        r = min(r + 1, max_r)
-    elif side == "bottom":
-        r = max(r - 1, 0)
-
-    if grid[r][c] in TILE_TYPES["blocking"]:
-        return door_pos
-    return (r, c)
-
-def scan_for_enemies():
-    """Find all enemy positions in the current room."""
-    global enemies
-    enemies = [(r, c) for r, row in enumerate(current_room_grid) for c, ch in enumerate(row) if ch == ENEMY_TILE]
-
-def move_enemies():
-    """Move each enemy one step toward the player, avoiding blocking tiles."""
-    global enemies, player_pos, current_room_grid, crawl_mode
-
-    new_positions = []
-    for (er, ec) in enemies:
-        dr = player_pos[0] - er
-        dc = player_pos[1] - ec
-        step_r, step_c = 0, 0
-        if abs(dr) > abs(dc):
-            step_r = 1 if dr > 0 else -1
-        elif dc != 0:
-            step_c = 1 if dc > 0 else -1
-
-        target_r = er + step_r
-        target_c = ec + step_c
-
-        if (target_r, target_c) == tuple(player_pos):
-            print("Enemy attacks!")
-            crawl_mode = False
-            return
-
-        if current_room_grid[target_r][target_c] in TILE_TYPES["walkable"]:
-            current_room_grid[er][ec] = FLOOR_TILE
-            current_room_grid[target_r][target_c] = ENEMY_TILE
-            new_positions.append((target_r, target_c))
-        else:
-            new_positions.append((er, ec))
-    enemies = new_positions
-
-def build_random_dungeon():
-    """
-    Build a random dungeon layout from handcrafted rooms in dungeon.json.
-    - Start with a random 'enter' room.
-    - Add random connector rooms while the current room has a right-side door.
-    - Doors in connectors are coin-flipped, but the left entry side is preserved.
-    - Place a final one-way exit on the last room that actually has a right-side door.
-    Returns: list of (category, name, room_dict) tuples.
-    """
-    layout = []
-
-    # 1) Starting room
-    enter_name = random.choice(list(dungeon["enter"].keys()))
-    current = copy.deepcopy(dungeon["enter"][enter_name])
-    layout.append(("enter", enter_name, current))
-
-    # 2) Grow the chain to the right only
-    while has_right_door(current):
-        connector_name = random.choice(list(dungeon["rooms"].keys()))
-        connector = copy.deepcopy(dungeon["rooms"][connector_name])
-
-        # Randomize doors but guarantee a left-side door to accept entry
-        randomize_doors(connector, preserve_side="left")
-
-        layout.append(("rooms", connector_name, connector))
-        current = connector
-
-    # 3) Ensure an exit exists on the last room that has a right-side door
-    place_exit_in_last_right_door(layout)
-
-    return layout
-
-def has_right_door(room_dict):
-    """True if any row has a two-way door at the rightmost column."""
-    right_idx = max(len(v) for v in room_dict.values()) - 1
-    return any(row[right_idx] == TWO_WAY_DOOR for row in room_dict.values())
-
-def place_exit_in_last_right_door(layout):
-    """Walk layout backwards and convert the last right-side & into a >."""
-    for i in range(len(layout) - 1, -1, -1):
-        _, _, room = layout[i]
-        right_idx = max(len(v) for v in room.values()) - 1
-        for k in room:
-            row = room[k]
-            if row[right_idx] == TWO_WAY_DOOR:
-                room[k] = row[:-1] + ONE_WAY_DOOR
-                return
-
-
-    """Check if any tile in the rightmost column is a two-way door."""
-    for row in room_dict.values():
-        if row[-1] == TWO_WAY_DOOR:
-            return True
-    return False
-
-def randomize_doors(room_dict, preserve_side=None):
-    """
-    50% chance to remove each two-way door in the room.
-    If preserve_side is provided ('left', 'right', 'top', 'bottom'),
-    a door on that wall is guaranteed to exist after randomization.
-    """
-    # First pass: flip coins on all & tiles
-    for key, row in room_dict.items():
-        row_list = list(row)
-        for i, ch in enumerate(row_list):
-            if ch == TWO_WAY_DOOR and random.random() < 0.5:
-                # Replace with wall if on an edge, otherwise floor
-                if i == 0 or i == len(row_list) - 1:
-                    row_list[i] = WALL_VERT
-                else:
-                    row_list[i] = FLOOR_TILE
-        room_dict[key] = "".join(row_list)
-
-    if preserve_side is None:
-        return
-
-    # Second pass: ensure at least one door exists on the preserved side
-    if preserve_side in ("left", "right"):
-        # Column index to enforce
-        enforce_idx = 0 if preserve_side == "left" else max(len(v) for v in room_dict.values()) - 1
-        # If any row already has &, we're good
-        if any(room_dict[k][enforce_idx] == TWO_WAY_DOOR for k in room_dict):
-            return
-        # Otherwise, place a door near the vertical middle on that edge
-        mid = str(len(room_dict) // 2)
-        if mid in room_dict:
-            row = list(room_dict[mid])
-            row[enforce_idx] = TWO_WAY_DOOR
-            room_dict[mid] = "".join(row)
-        else:
-            # Fallback: first row
-            first = str(0)
-            row = list(room_dict[first])
-            row[enforce_idx] = TWO_WAY_DOOR
-            room_dict[first] = "".join(row)
-
-def replace_right_door_with_exit(room_dict):
-    """Find a right-side two-way door and replace it with a one-way exit."""
-    for key, row in room_dict.items():
-        if row[-1] == TWO_WAY_DOOR:
-            room_dict[key] = row[:-1] + ONE_WAY_DOOR
-            return
-
-# =========================
-# ======= MOVEMENT ========
-# =========================
-def grid_has_side_door(grid, side, door_char=TWO_WAY_DOOR):
-    """Check a list-of-lists grid for a door on a true edge column/row."""
-    max_r = len(grid) - 1
-    max_c = len(grid[0]) - 1
-    if side == "left":
-        return any(grid[r][0] == door_char for r in range(len(grid)))
-    if side == "right":
-        return any(grid[r][max_c] == door_char for r in range(len(grid)))
-    if side == "top":
-        return any(ch == door_char for ch in grid[0])
-    if side == "bottom":
-        return any(ch == door_char for ch in grid[max_r])
-    return False
-
-def player_move(dr, dc):
-    global player_pos, current_room_grid, current_room_type, current_level_name, crawl_mode, dungeon_sequence
-
-    new_r = player_pos[0] + dr
-    new_c = player_pos[1] + dc
-
-    # Bounds
-    if not (0 <= new_r < len(current_room_grid) and 0 <= new_c < len(current_room_grid[0])):
-        return
-
-    target = current_room_grid[new_r][new_c]
-
-    # Blockers
-    if target in TILE_TYPES["blocking"]:
-        return
-
-    # Enemy
-    if target == ENEMY_TILE:
-        print("You engage the enemy!")
-        crawl_mode = False
-        return
-
-    # Two-way door
-    if target == TWO_WAY_DOOR:
-        exit_side = get_side((new_r, new_c), current_room_grid)
-
-        # Only the right-side door advances the chain
-        if exit_side != "right":
-            print("The door leads nowhere.")
-            return
-
-        if not dungeon_sequence:
-            print("The way forward is sealed.")
-            return
-
-        # Peek next room (don’t pop until validated)
-        _, next_room_type, room_dict = dungeon_sequence[0]
-        next_grid = load_room(room_dict)
-
-        # Must have a left-side door to accept entry
-        if not grid_has_side_door(next_grid, "left", TWO_WAY_DOOR):
-            print("The door is bricked shut.")
-            return
-
-        # Valid: commit transition
-        dungeon_sequence.pop(0)
-        current_room_grid = next_grid
-
-        # Spawn just inside the left door
-        next_wall_doors = door_positions_on_side(current_room_grid, "left", TWO_WAY_DOOR)
-        spawn_door = next_wall_doors[0]
-        spawn_pos = get_spawn_in_front_of(spawn_door, current_room_grid, "left")
-
-        # Move player
-        current_room_grid[player_pos[0]][player_pos[1]] = FLOOR_TILE
-        player_pos = list(spawn_pos)
-        place_player(current_room_grid, player_pos)
-        scan_for_enemies()
-        draw_room(current_room_grid)
-        return
-
-    # One-way exit
-    if target == ONE_WAY_DOOR:
-        print("You exit the dungeon!")
-        crawl_mode = False
-        return
-
-    # Regular movement
-    current_room_grid[player_pos[0]][player_pos[1]] = FLOOR_TILE
-    player_pos = [new_r, new_c]
-    place_player(current_room_grid, player_pos)
-    move_enemies()
-    draw_room(current_room_grid)
 
 # =========================
 # ======= KEYBINDS ========
@@ -426,52 +95,289 @@ def _(event):
     player_move(0, 1)
 
 # =========================
-# ======= GAME FLOW =======
+# ======== DUNGEON ========
 # =========================
+def generate_patrol_path(r, c, etype=None):
+    """
+    Auto-generate a straight patrol path for an enemy based on its movement rules.
+    Currently used for P (Patrolling) enemies, but supports all types.
+    """
+    rows, cols = len(current_room_grid), len(current_room_grid[0])
+    if etype is None:
+        etype = "P"
+
+    # Movement rules unified with BFS can_step()
+    def can_step(tile):
+        if etype in {"E", "P"}:  # Regular & Patrol — avoid traps and water
+            return tile in TILE_TYPES["walkable"]
+        elif etype == "R":       # Reckless — can step on traps/water
+            return tile not in TILE_TYPES["blocking"]
+        elif etype == "F":       # Flying — ignores traps/water
+            return tile not in {WALL_VERT, WALL_HORZ}
+        return False
+
+    best_path = []
+    for dr, dc in [(-1,0),(1,0),(0,-1),(0,1)]:
+        path = []
+        nr, nc = r + dr, c + dc
+        while 0 <= nr < rows and 0 <= nc < cols:
+            tile = current_room_grid[nr][nc]
+            # Stop if another entity is in the way
+            if tile in TILE_TYPES["entity"]:
+                break
+            if not can_step(tile):
+                break
+            path.append((nr, nc))
+            nr += dr
+            nc += dc
+        if len(path) > len(best_path):
+            best_path = path
+
+    # Patrol path is forward then backward
+    return best_path + list(reversed(best_path))
+
+def draw_room(grid):
+    """Clear the screen and print the dungeon grid with basic colors."""
+    import os
+    subprocess.run('cls' if os.name == 'nt' else 'clear', shell=True)
+    color_map = {
+        PLAYER_TILE: '<ansigreen>{}</ansigreen>',
+        "E": '<ansired>{}</ansired>',
+        "P": '<ansiyellow>{}</ansiyellow>',
+        "R": '<ansimagenta>{}</ansimagenta>',
+        "F": '<ansiblue>{}</ansiblue>',
+        TRAP_TILE: '<ansidarkgray>{}</ansidarkgray>',
+        WATER_TILE: '<ansiblue>{}</ansiblue>'
+    }
+    for row in grid:
+        styled_row = []
+        for ch in row:
+            safe_ch = html.escape(ch)
+            if ch in color_map:
+                styled_row.append(color_map[ch].format(safe_ch))
+            else:
+                styled_row.append(safe_ch)
+        print(HTML("".join(styled_row)))
+
+def player_move(dr, dc):
+    global player_pos, current_room_grid, crawl_mode, enemies
+
+    new_r = player_pos[0] + dr
+    new_c = player_pos[1] + dc
+
+    # Bounds check
+    if not (0 <= new_r < len(current_room_grid) and 0 <= new_c < len(current_room_grid[0])):
+        return
+
+    target = current_room_grid[new_r][new_c]
+
+    # Blockers
+    if target in TILE_TYPES["blocking"]:
+        return
+
+    # Trap handling for player
+    if target == TRAP_TILE:
+        print("You hit a trap and take X damage!")
+        current_room_grid[new_r][new_c] = FLOOR_TILE
+
+        # Enemy encounter
+    if target in TILE_TYPES["entity"] and target != PLAYER_TILE:
+        crawl_mode = False
+        subprocess.run('clear', shell=True)  # clear dungeon view
+        print("You engage the enemy!")
+        start_encounter(current_dungeon_key)  # prints encounter UI + enemies
+        return
+
+    # Exit
+    if target == EXIT_DOOR:
+        print("You exit the dungeon!")
+        crawl_mode = False
+        draw_room(current_room_grid)
+        return
+
+    # Move player
+    current_room_grid[player_pos[0]][player_pos[1]] = FLOOR_TILE
+    player_pos = [new_r, new_c]
+    current_room_grid[player_pos[0]][player_pos[1]] = PLAYER_TILE
+
+    # BFS pathfinding with E avoiding traps
+    def bfs_path(start, goal, etype):
+        rows, cols = len(current_room_grid), len(current_room_grid[0])
+        queue = deque([(start, [])])
+        visited = {start}
+
+        def can_step(tile):
+            if etype == "E":  # Regular — only walkable tiles (floor, exit)
+                return tile in TILE_TYPES["walkable"]
+            elif etype == "P":  # Patrol
+                return tile in TILE_TYPES["walkable"]
+            elif etype == "R":  # Reckless
+                return tile not in TILE_TYPES["blocking"]
+            elif etype == "F":  # Flying
+                return tile not in {WALL_VERT, WALL_HORZ}
+            return False
+
+        while queue:
+            (r, c), path = queue.popleft()
+            if (r, c) == goal:
+                return path
+            for dr, dc in [(-1,0),(1,0),(0,-1),(0,1)]:
+                nr, nc = r + dr, c + dc
+                if 0 <= nr < rows and 0 <= nc < cols:
+                    tile = current_room_grid[nr][nc]
+                    if (nr, nc) not in visited and can_step(tile):
+                        visited.add((nr, nc))
+                        queue.append(((nr, nc), path + [(nr, nc)]))
+        return None
+
+    # Enemy movement
+    new_positions = []
+    for (er, ec, etype, patrol, under_tile) in enemies:
+        sees_player = False
+        if etype == "P":
+            if er == player_pos[0]:
+                step = 1 if ec < player_pos[1] else -1
+                if all(current_room_grid[er][c] not in TILE_TYPES["blocking"] for c in range(ec+step, player_pos[1], step)):
+                    sees_player = True
+            elif ec == player_pos[1]:
+                step = 1 if er < player_pos[0] else -1
+                if all(current_room_grid[r][ec] not in TILE_TYPES["blocking"] for r in range(er+step, player_pos[0], step)):
+                    sees_player = True
+
+        if etype == "P" and not sees_player and patrol:
+            next_pos = patrol.pop(0)
+            patrol.append(next_pos)
+            nr, nc = next_pos
+            if current_room_grid[nr][nc] == PLAYER_TILE:
+                print("Enemy attacks!")
+                crawl_mode = False
+                draw_room(current_room_grid)
+                return
+            current_room_grid[er][ec] = under_tile
+            new_under = current_room_grid[nr][nc]
+            current_room_grid[nr][nc] = etype
+            new_positions.append((nr, nc, etype, patrol, new_under))
+            continue
+
+        path = bfs_path((er, ec), tuple(player_pos), etype)
+
+        # Wander fallback for E if no path found
+        if etype == "E" and not path:
+            for dr_f, dc_f in random.sample([(-1,0),(1,0),(0,-1),(0,1)], 4):
+                nr, nc = er + dr_f, ec + dc_f
+                if 0 <= nr < len(current_room_grid) and 0 <= nc < len(current_room_grid[0]):
+                    tile = current_room_grid[nr][nc]
+                    if tile in TILE_TYPES["walkable"]:
+                        path = [(nr, nc)]
+                        break
+
+        if path and len(path) > 0:
+            nr, nc = path[0]
+            if (nr, nc) == tuple(player_pos):
+                crawl_mode = False
+                subprocess.run('clear', shell=True)  # hide dungeon
+                print("Enemy attacks!")
+                start_encounter(current_dungeon_key)  # same encounter UI as player-initiated
+                return
+            if etype == "R" and current_room_grid[nr][nc] in {TRAP_TILE, WATER_TILE}:
+                current_room_grid[er][ec] = under_tile
+                print("A reckless enemy perished in a hazard!")
+                continue
+            current_room_grid[er][ec] = under_tile
+            new_under = current_room_grid[nr][nc]
+            current_room_grid[nr][nc] = etype
+            new_positions.append((nr, nc, etype, patrol, new_under))
+        else:
+            new_positions.append((er, ec, etype, patrol, under_tile))
+    enemies = new_positions
+    
+    draw_room(current_room_grid)
+
 def dung(alevel):
-    """
-    Build and enter a random dungeon layout for the given level type.
-    Uses handcrafted rooms from dungeon.json, randomizes door presence,
-    and ends with a one-way exit.
-    """
-    global crawl_mode, current_room_grid, player_pos, current_room_type, current_level_name, dungeon_sequence
+    global crawl_mode, current_room_grid, player_pos, enemies, current_dungeon_key
 
-    current_level_name = alevel
+    # Remember the current dungeon key (e.g., "paved")
+    current_dungeon_key = alevel
 
-    # Build a randomized sequence of rooms (deep copies)
-    dungeon_sequence = build_random_dungeon()
+    room_name = random.choice(list(dungeon[alevel].keys()))
+    room_dict = copy.deepcopy(dungeon[alevel][room_name])
+    current_room_grid = [list(room_dict[str(i)]) for i in sorted(map(int, room_dict.keys()))]
 
-    # Start with the first room in the sequence
-    _, current_room_type, room_dict = dungeon_sequence.pop(0)
-    current_room_grid = load_room(room_dict)  # convert dict -> list of lists
 
-    # Find the player start position (look for '@' or default to row 4, col 1)
-    start_pos = None
+    player_pos = None
     for r, row in enumerate(current_room_grid):
         if PLAYER_TILE in row:
-            start_pos = [r, row.index(PLAYER_TILE)]
+            player_pos = [r, row.index(PLAYER_TILE)]
             break
-    if not start_pos:
-        start_pos = [4, 1]
+    if not player_pos:
+        player_pos = [4, 1]
+        current_room_grid[player_pos[0]][player_pos[1]] = PLAYER_TILE
 
-    player_pos = start_pos
-    place_player(current_room_grid, player_pos)
+    enemies = []
+    for r, row in enumerate(current_room_grid):
+        for c, ch in enumerate(row):
+            if ch in TILE_TYPES["entity"] and ch != PLAYER_TILE:
+                patrol_path = generate_patrol_path(r, c, ch) if ch == "P" else None
+                # Store the tile underneath — assume floor unless you track it in JSON
+                under_tile = FLOOR_TILE
+                enemies.append((r, c, ch, patrol_path, under_tile))
 
-    scan_for_enemies()
     crawl_mode = True
-
+    draw_room(current_room_grid)
     while crawl_mode:
-        draw_room(current_room_grid)
         input("", key_bindings=bindings)
 
+# =========================
+# ======= ENCOUNTER =======
+# =========================
+
+def start_encounter(dungeon_key):
+    """
+    Minimal encounter picker with difficulty scaling from dStats:
+    - Adjusts max threat by dStats["threatBonus"].
+    - Adjusts enemy count by dStats["enemyBonus"].
+    - Filters enemy.json by enemy.threat <= adjusted threat.
+    - Prints a header and the encounter list with enemy health.
+    - Stores encounter enemies in dStats["enemies"] for combat tracking.
+    """
+
+    threat = level[dungeon_key].get("threat", 1) + dStats.get("threatBonus", 0)
+
+    print(f"\n{dungeon_key}: Threat {threat}\n" + "-" * 30)
+
+    # Base enemy count logic
+    if threat == 1:
+        num_enemies = random.randint(1, 2)
+    else:
+        num_enemies = 1
+
+    # Apply difficulty enemy bonus
+    num_enemies += dStats.get("enemyBonus", 0)
+
+    # Filter valid enemies by adjusted threat
+    valid = [name for name, stats in enemy.items() if stats.get("threat", 1) <= threat]
+    if not valid:
+        print(f"No valid enemies for threat {threat}.")
+        return []
+
+    chosen = [random.choice(valid) for _ in range(num_enemies)]
+
+    # Store encounter enemies in dStats for combat
+    dStats["enemies"] = []
+    print("Enemies:")
+    for name in chosen:
+        hp = enemy[name].get("Health", "?")
+        dStats["enemies"].append({"name": name, "hp": hp})
+        print(f" - {name} ({hp} HP)")
+
+    return chosen
+
+
+# =========================
+# ======= GAME FLOW =======
+# =========================
 
 def move():
-    """
-    Overworld path selection.
-    Picks a random set of level options, shows descriptions,
-    and routes to the correct handler. Dungeon levels are loaded
-    from dungeon.json based on the chosen level type.
-    """
     # Randomly choose between 2 and 5 paths
     pathChoices = random.randint(2, 5)
     pathWeight = [level[i]["weight"] for i in level]
@@ -520,7 +426,7 @@ def boss(alevel):
 # ======= GAME START ======
 # =========================
 def run():
-    global Stats, inv
+    global Stats, inv, difficulty
     _ = input("|--Press Enter to Continue--|")
     subprocess.run('clear', shell=True)
 
@@ -530,18 +436,22 @@ def run():
         match i.upper():
             case "A":
                 difficulty = "easy"
+                dStats.update([("threatBonus", 0), ("enemyBonus", 0)])
                 Stats.update([("maxHP", 500), ("HP", 500), ("strengthMult", 2)])
                 inv.append(item["Copper Sword"])
             case "B":
                 difficulty = "intermediate"
+                dStats.update([("threatBonus", 0), ("enemyBonus", 0)])
                 Stats.update([("maxHP", 500), ("HP", 500), ("strengthMult", 1.25)])
                 inv.append(item["Copper Sword"])
             case "C":
                 difficulty = "hard"
+                dStats.update([("threatBonus", 1), ("enemyBonus", 0)])
                 Stats.update([("maxHP", 250), ("HP", 250), ("strengthMult", 1)])
                 inv.append(item["Copper Sword"])
             case "D":
                 difficulty = "impossible"
+                dStats.update([("threatBonus", 3), ("enemyBonus", 1)])
                 Stats.update([("maxHP", 100), ("HP", 100), ("strengthMult", 0.5)])
                 inv.append(item["Copper Dagger"])
         subprocess.run('clear', shell=True)
